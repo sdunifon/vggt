@@ -410,10 +410,12 @@ app = FastAPI()
 
 
 @app.get("/ping")
+@app.head("/ping")
 def ping_endpoint():
     """
     Health check endpoint for RunPod load balancing.
     Returns 200 when model is loaded and ready, 503 otherwise.
+    Supports both GET and HEAD methods.
     """
     if model is not None:
         return Response(content="OK", status_code=200)

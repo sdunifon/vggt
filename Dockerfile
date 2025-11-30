@@ -1,7 +1,8 @@
 # Dockerfile for VGGT - Visual Geometry Grounded Transformer
 # NVIDIA CUDA compatible for RunPod deployment with Gradio API
+# Updated for RTX 5090 (Blackwell/sm_120) support - requires CUDA 12.8+
 
-FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+FROM nvidia/cuda:12.8.0-cudnn-devel-ubuntu22.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -41,8 +42,8 @@ RUN python -m pip install --upgrade pip setuptools wheel
 # Set working directory
 WORKDIR /app
 
-# Install PyTorch with CUDA 12.1 support
-RUN pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
+# Install PyTorch with CUDA 12.8 support (required for RTX 5090/Blackwell)
+RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 
 # Copy requirements files first for better caching
 COPY requirements.txt requirements_demo.txt ./
