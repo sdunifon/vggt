@@ -1,0 +1,72 @@
+# docker-compose.yml - Local development and testing for VGGT
+# Requires NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+#
+# Usage:
+#   With GPU (default):  docker compose up --build
+#   CPU only (testing):  docker compose --profile cpu up vggt-cpu --build
+#                        (must specify service name to avoid starting GPU service)
+
+services:
+  # GPU-enabled service (default) - requires NVIDIA Container Toolkit
+  vggt:
+    # Force x86_64 platform for CUDA PyTorch wheel compatibility
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vggt:latest
+    container_name: vggt-api
+    ports:
+      - "7860:7860"
+    environment:
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - GRADIO_SERVER_PORT=7860
+      - PRELOAD_MODEL=true
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - vggt-cache:/app/cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: ["/bin/bash", "/app/start.sh"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+
+  # CPU-only service for local testing (no GPU required, but very slow)
+  vggt-cpu:
+    profiles: ["cpu"]
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vggt:latest
+    container_name: vggt-api-cpu
+    ports:
+      - "7860:7860"
+    environment:
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - GRADIO_SERVER_PORT=7860
+      - PRELOAD_MODEL=false
+    volumes:
+      - vggt-cache:/app/cache
+    command: ["/bin/bash", "/app/start.sh"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/"]
+      interval: 60s
+      timeout: 60s
+      retries: 3
+      start_period: 300s
+
+volumes:
+  vggt-cache:
+    driver: local
