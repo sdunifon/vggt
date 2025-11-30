@@ -89,4 +89,4 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:7860/ || exit 1
 
 # Default command - run the Gradio demo with API enabled
-CMD ["python", "demo_gradio_api.py"]
+CMD ["python", "api.py"]
