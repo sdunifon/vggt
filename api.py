@@ -20,7 +20,8 @@ from datetime import datetime
 import glob
 import gc
 import time
-from fastapi import Response
+import uvicorn
+from fastapi import FastAPI, Response
 
 sys.path.append("vggt/")
 
@@ -403,9 +404,12 @@ server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
 server_port = int(os.environ.get("GRADIO_SERVER_PORT", "7860"))
 
 # -------------------------------------------------------------------------
-# Add /ping endpoint for RunPod health checks (direct FastAPI route)
+# Create FastAPI app with /ping endpoint for RunPod health checks
 # -------------------------------------------------------------------------
-@demo.app.get("/ping")
+app = FastAPI()
+
+
+@app.get("/ping")
 def ping_endpoint():
     """
     Health check endpoint for RunPod load balancing.
@@ -417,16 +421,15 @@ def ping_endpoint():
         return Response(content="Model not ready", status_code=503)
 
 
+# Enable queue on Gradio demo and mount on FastAPI
+demo = demo.queue(max_size=20)
+app = gr.mount_gradio_app(app, demo, path="/")
+
+
 if __name__ == "__main__":
     print(f"Starting VGGT API server on {server_name}:{server_port}")
     print(f"Web UI: http://{server_name}:{server_port}")
     print(f"API endpoint: http://{server_name}:{server_port}/api/vggt/create/images")
     print(f"Health check: http://{server_name}:{server_port}/ping")
-    print(f"API docs: http://{server_name}:{server_port}/docs")
 
-    demo.queue(max_size=20).launch(
-        server_name=server_name,
-        server_port=server_port,
-        show_error=True,
-        share=False,
-    )
+    uvicorn.run(app, host=server_name, port=server_port)
