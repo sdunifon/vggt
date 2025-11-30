@@ -20,6 +20,7 @@ from datetime import datetime
 import glob
 import gc
 import time
+from fastapi import Response
 
 sys.path.append("vggt/")
 
@@ -295,6 +296,21 @@ def gradio_process_images(images, output_format, conf_thres):
 
 
 # -------------------------------------------------------------------------
+# ping - Health check endpoint for RunPod
+# -------------------------------------------------------------------------
+def ping():
+    """
+    Health check endpoint for RunPod.
+    Returns server status and model readiness.
+    """
+    return {
+        "status": "ok",
+        "model_loaded": model is not None,
+        "device": device,
+    }
+
+
+# -------------------------------------------------------------------------
 # Build Gradio UI with API
 # -------------------------------------------------------------------------
 theme = gr.themes.Ocean()
@@ -370,16 +386,42 @@ with gr.Blocks(
         api_name="vggt/create/images",
     )
 
+    # Ping endpoint for RunPod health checks (hidden from UI)
+    ping_btn = gr.Button("Ping", visible=False)
+    ping_output = gr.JSON(visible=False)
+    ping_btn.click(
+        fn=ping,
+        inputs=[],
+        outputs=[ping_output],
+        api_name="ping",
+    )
+
 # -------------------------------------------------------------------------
 # Launch configuration
 # -------------------------------------------------------------------------
 server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
 server_port = int(os.environ.get("GRADIO_SERVER_PORT", "7860"))
 
+# -------------------------------------------------------------------------
+# Add /ping endpoint for RunPod health checks (direct FastAPI route)
+# -------------------------------------------------------------------------
+@demo.app.get("/ping")
+def ping_endpoint():
+    """
+    Health check endpoint for RunPod load balancing.
+    Returns 200 when model is loaded and ready, 503 otherwise.
+    """
+    if model is not None:
+        return Response(content="OK", status_code=200)
+    else:
+        return Response(content="Model not ready", status_code=503)
+
+
 if __name__ == "__main__":
     print(f"Starting VGGT API server on {server_name}:{server_port}")
     print(f"Web UI: http://{server_name}:{server_port}")
     print(f"API endpoint: http://{server_name}:{server_port}/api/vggt/create/images")
+    print(f"Health check: http://{server_name}:{server_port}/ping")
     print(f"API docs: http://{server_name}:{server_port}/docs")
 
     demo.queue(max_size=20).launch(

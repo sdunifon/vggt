@@ -39,5 +39,5 @@ fi
 
 echo "Starting Gradio server on port ${GRADIO_SERVER_PORT}..."
 
-# Run the Gradio API server
-exec python demo_gradio_api.py
+# Run the API server
+exec python api.py
