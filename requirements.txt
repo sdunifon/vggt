@@ -1,5 +1,5 @@
-torch==2.3.1
-torchvision==0.18.1
+# torch and torchvision are installed separately in Dockerfile with CUDA support
+# Do not pin versions here to avoid conflicts with CUDA-specific wheels
 numpy==1.26.1
 Pillow
 huggingface_hub
