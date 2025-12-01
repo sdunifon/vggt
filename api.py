@@ -21,6 +21,7 @@ import glob
 import gc
 import time
 import uvicorn
+import threading
 from fastapi import FastAPI, Response
 
 sys.path.append("vggt/")
@@ -48,6 +49,67 @@ model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
 model.eval()
 model = model.to(device)
 print("Model loaded successfully!")
+
+
+# -------------------------------------------------------------------------
+# Cleanup configuration and tracking
+# -------------------------------------------------------------------------
+CLEANUP_INTERVAL_SECONDS = 60  # Check for old directories every 60 seconds
+CLEANUP_AGE_MINUTES = 10  # Remove directories older than 10 minutes after last use
+
+# Track directory usage: {dir_path: last_used_timestamp}
+directory_usage = {}
+directory_usage_lock = threading.Lock()
+
+
+def cleanup_old_directories():
+    """
+    Background task to remove api_output directories that haven't been used
+    for at least CLEANUP_AGE_MINUTES minutes.
+    """
+    while True:
+        time.sleep(CLEANUP_INTERVAL_SECONDS)
+        try:
+            current_time = time.time()
+            cutoff_time = current_time - (CLEANUP_AGE_MINUTES * 60)
+
+            # Find all api_output directories
+            output_dirs = glob.glob("api_output_*")
+
+            with directory_usage_lock:
+                for dir_path in output_dirs:
+                    if os.path.isdir(dir_path):
+                        # Check if we have a tracked usage time
+                        last_used = directory_usage.get(dir_path)
+
+                        if last_used is None:
+                            # Not tracked - use directory creation time
+                            last_used = os.path.getctime(dir_path)
+
+                        if last_used < cutoff_time:
+                            try:
+                                shutil.rmtree(dir_path)
+                                print(f"Cleanup: Removed old directory {dir_path}")
+                                # Remove from tracking dict
+                                directory_usage.pop(dir_path, None)
+                            except Exception as e:
+                                print(f"Cleanup: Failed to remove {dir_path}: {e}")
+        except Exception as e:
+            print(f"Cleanup task error: {e}")
+
+
+def mark_directory_used(dir_path: str):
+    """
+    Mark a directory as recently used to prevent premature cleanup.
+    """
+    with directory_usage_lock:
+        directory_usage[dir_path] = time.time()
+
+
+# Start the cleanup background thread
+cleanup_thread = threading.Thread(target=cleanup_old_directories, daemon=True)
+cleanup_thread.start()
+print(f"Cleanup task started (removes directories unused for {CLEANUP_AGE_MINUTES} minutes)")
 
 
 # -------------------------------------------------------------------------
@@ -202,6 +264,9 @@ def process_images(
     target_dir_images = os.path.join(target_dir, "images")
     os.makedirs(target_dir_images, exist_ok=True)
 
+    # Mark directory as used for cleanup tracking
+    mark_directory_used(target_dir)
+
     # Copy uploaded images to target directory
     image_paths = []
     for i, img_file in enumerate(images):
@@ -248,10 +313,13 @@ def process_images(
     analytics["timing"]["export_seconds"] = time.time() - export_start
     analytics["timing"]["total_seconds"] = time.time() - total_start
 
-    # Cleanup
+    # Cleanup model memory
     del predictions
     gc.collect()
     torch.cuda.empty_cache()
+
+    # Mark directory as used - cleanup countdown starts from here
+    mark_directory_used(target_dir)
 
     return output_file, analytics
 
